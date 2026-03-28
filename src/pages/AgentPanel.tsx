@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAgentAuth } from '@/hooks/useAgentAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { formatDuration } from '@/lib/store';
 import { getTodayEST } from '@/lib/dateUtils';
