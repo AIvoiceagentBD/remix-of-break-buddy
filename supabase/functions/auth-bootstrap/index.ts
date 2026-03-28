@@ -20,9 +20,9 @@ const stringifyError = (err: unknown): string => {
   }
 };
 
-const supabaseUrl = Deno.env.get("SUPABASE_URL");
+const supabaseUrl = Deno.env.get("EXT_SUPABASE_URL");
 const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
-const dbUrl = Deno.env.get("SUPABASE_DB_URL");
+const dbUrl = Deno.env.get("EXT_SUPABASE_DB_URL");
 
 const sql = dbUrl
   ? postgres(dbUrl, {

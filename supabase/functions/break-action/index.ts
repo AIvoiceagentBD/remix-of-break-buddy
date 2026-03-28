@@ -7,9 +7,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+const supabaseUrl = Deno.env.get("EXT_SUPABASE_URL")!;
 const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-const dbUrl = Deno.env.get("SUPABASE_DB_URL")!;
+const dbUrl = Deno.env.get("EXT_SUPABASE_DB_URL")!;
 
 const sql = postgres(dbUrl, {
   prepare: false,
