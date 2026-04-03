@@ -33,25 +33,29 @@ export default function AgentPanel() {
   const today = getTodayEST();
   const displayName = profile?.display_name || user?.email || 'Agent';
 
-  // All data fetching goes through the edge function (bypasses 503 REST API)
+  // Direct Supabase queries for refresh
   const refreshData = useCallback(async () => {
     if (!user) return;
     try {
-      const { data, error } = await supabase.functions.invoke('break-action', {
-        body: { action: 'refresh', date: today },
-      });
-      if (error || !data) return; // keep existing state on failure
-      if (data.activeBreak) {
-        setActiveBreak(data.activeBreak);
-        setElapsedSeconds(Math.floor((Date.now() - new Date(data.activeBreak.start_time).getTime()) / 1000));
+      const [activeResult, sessionsResult, allActiveResult, pendingResult] = await Promise.all([
+        supabase.from('active_breaks').select('break_type, start_time').eq('user_id', user.id).maybeSingle(),
+        supabase.from('break_sessions').select('*').eq('user_id', user.id).eq('date', today).order('start_time', { ascending: false }),
+        supabase.from('active_breaks').select('id', { count: 'exact', head: true }),
+        supabase.from('break_approval_requests').select('*').eq('user_id', user.id).eq('status', 'pending').maybeSingle(),
+      ]);
+
+      if (activeResult.data) {
+        setActiveBreak(activeResult.data);
+        setElapsedSeconds(Math.floor((Date.now() - new Date(activeResult.data.start_time).getTime()) / 1000));
       } else {
         setActiveBreak(null);
         setElapsedSeconds(0);
       }
-      setActiveBreakCount(data.activeBreakCount || 0);
-      setPendingApproval(data.pendingApproval || null);
-      setTodayTotal((data.sessions || []).reduce((sum: number, s: any) => sum + (s.duration || 0), 0));
-      setTodaySessions(data.sessions || []);
+      setActiveBreakCount(allActiveResult.count || 0);
+      setPendingApproval(pendingResult.data || null);
+      const sessions = sessionsResult.data || [];
+      setTodayTotal(sessions.reduce((sum: number, s: any) => sum + (s.duration || 0), 0));
+      setTodaySessions(sessions);
     } catch {
       // Silently keep existing state
     }
@@ -60,9 +64,9 @@ export default function AgentPanel() {
   // Record login for today
   useEffect(() => {
     if (!user) return;
-    supabase.functions.invoke('break-action', {
-      body: { action: 'record-login', date: getTodayEST() },
-    }).catch(() => {});
+    supabase.from('login_sessions')
+      .upsert({ user_id: user.id, date: getTodayEST(), logged_in_at: new Date().toISOString() }, { onConflict: 'user_id,date' })
+      .then(() => {});
   }, [user]);
 
   useEffect(() => {
@@ -92,9 +96,13 @@ export default function AgentPanel() {
         const record = payload.new as any;
         if (record.status === 'approved') {
           toast.success('Break approved! Starting your break...');
-          // Auto-start via edge function
-          await supabase.functions.invoke('break-action', {
-            body: { action: 'start', break_type: record.break_type, agent_name: displayName },
+          // Auto-start break directly
+          const now = new Date().toISOString();
+          await supabase.from('active_breaks').insert({
+            user_id: user.id,
+            agent_name: displayName,
+            break_type: record.break_type,
+            start_time: now,
           });
           setPendingApproval(null);
           refreshData();
@@ -114,17 +122,36 @@ export default function AgentPanel() {
   const handleStart = async () => {
     setStartingBreak(true);
     try {
-      const { data, error } = await supabase.functions.invoke('break-action', {
-        body: { action: 'start', break_type: selectedBreak, agent_name: displayName },
-      });
-      if (error) throw new Error('Failed to start break');
-      if (data?.error) throw new Error(data.error);
-      if (data?.needsApproval) {
-        toast.info(`${data.activeCount} agents already on break. Approval request sent to management.`);
+      // Check concurrent breaks
+      const { count } = await supabase.from('active_breaks').select('id', { count: 'exact', head: true });
+      const activeCount = count || 0;
+
+      if (activeCount >= MAX_CONCURRENT_BREAKS) {
+        // Submit approval request
+        await supabase.from('break_approval_requests').insert({
+          user_id: user.id,
+          agent_name: displayName,
+          break_type: selectedBreak,
+        });
+        toast.info(`${activeCount} agents already on break. Approval request sent to management.`);
         refreshData();
         return;
       }
-      setActiveBreak({ break_type: selectedBreak, start_time: data.start_time });
+
+      // Check if already on break
+      const { data: existing } = await supabase.from('active_breaks').select('id').eq('user_id', user.id).maybeSingle();
+      if (existing) throw new Error('Already on break');
+
+      const now = new Date().toISOString();
+      const { error } = await supabase.from('active_breaks').insert({
+        user_id: user.id,
+        agent_name: displayName,
+        break_type: selectedBreak,
+        start_time: now,
+      });
+      if (error) throw error;
+
+      setActiveBreak({ break_type: selectedBreak, start_time: now });
       setElapsedSeconds(0);
       toast.success('Break started!');
     } catch (err: any) {
@@ -137,18 +164,31 @@ export default function AgentPanel() {
 
   const handleCancelRequest = async () => {
     if (!pendingApproval) return;
-    await supabase.functions.invoke('break-action', {
-      body: { action: 'cancel-request', request_id: pendingApproval.id },
-    });
+    await supabase.from('break_approval_requests').delete().eq('id', pendingApproval.id).eq('user_id', user.id).eq('status', 'pending');
     setPendingApproval(null);
     toast.info('Break request cancelled.');
   };
 
   const handleEnd = async () => {
     if (!activeBreak) return;
-    await supabase.functions.invoke('break-action', {
-      body: { action: 'end', agent_name: displayName, date: getTodayEST() },
+    const { data: active } = await supabase.from('active_breaks').select('*').eq('user_id', user.id).maybeSingle();
+    if (!active) return;
+
+    const now = new Date();
+    const start = new Date(active.start_time);
+    const duration = Math.floor((now.getTime() - start.getTime()) / 1000);
+
+    await supabase.from('break_sessions').insert({
+      user_id: user.id,
+      agent_name: displayName,
+      break_type: active.break_type,
+      start_time: active.start_time,
+      end_time: now.toISOString(),
+      duration,
+      date: getTodayEST(),
     });
+    await supabase.from('active_breaks').delete().eq('user_id', user.id);
+
     setActiveBreak(null);
     setElapsedSeconds(0);
     refreshData();

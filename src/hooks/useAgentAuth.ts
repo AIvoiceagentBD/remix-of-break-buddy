@@ -12,18 +12,7 @@ interface AuthState {
   error: string | null;
 }
 
-const REQUEST_TIMEOUT_MS = 8000;
-const MAX_RETRIES = 2;
-const RETRY_DELAYS = [800, 1500];
 const ROLE_CACHE_PREFIX = 'agent-auth-role:';
-
-const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-const withTimeout = <T,>(promise: Promise<T>, ms: number): Promise<T> =>
-  Promise.race([
-    promise,
-    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('Request timeout')), ms)),
-  ]);
 
 const isAppRole = (value: unknown): value is AppRole => value === 'agent' || value === 'manager';
 
@@ -50,12 +39,8 @@ const readCachedRole = (userId: string): AppRole | null => {
 const writeCachedRole = (userId: string, role: AppRole) => {
   try {
     localStorage.setItem(`${ROLE_CACHE_PREFIX}${userId}`, role);
-  } catch {
-    // Ignore cache write failures (private mode/storage disabled)
-  }
+  } catch {}
 };
-
-const isRetryableError = (message: string) => /timeout|503|temporarily unavailable|network|connection/i.test(message);
 
 export function useAgentAuth() {
   const [state, setState] = useState<AuthState>({
@@ -86,67 +71,46 @@ export function useAgentAuth() {
       return;
     }
 
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      if (!mountedRef.current) return;
+    // Direct Supabase queries instead of edge function
+    try {
+      const [profileResult, roleResult] = await Promise.all([
+        supabase.from('profiles').select('display_name').eq('user_id', user.id).maybeSingle(),
+        supabase.from('user_roles').select('role').eq('user_id', user.id).maybeSingle(),
+      ]);
 
-      try {
-        const { data, error: fnError } = await withTimeout(
-          supabase.functions.invoke<{ profile?: { display_name?: string }; role?: string; error?: string }>('auth-bootstrap', { body: {} }),
-          REQUEST_TIMEOUT_MS,
-        );
-
-        const roleCandidate = data?.role;
-        if (!fnError && isAppRole(roleCandidate)) {
-          const resolvedRole = roleCandidate as AppRole;
-          writeCachedRole(user.id, resolvedRole);
-
-          if (mountedRef.current) {
-            setState({
-              user,
-              profile: { display_name: data?.profile?.display_name ?? profile.display_name },
-              role: resolvedRole,
-              loading: false,
-              error: null,
-            });
-          }
-          return;
+      const roleCandidate = roleResult.data?.role;
+      if (isAppRole(roleCandidate)) {
+        writeCachedRole(user.id, roleCandidate);
+        if (mountedRef.current) {
+          setState({
+            user,
+            profile: { display_name: profileResult.data?.display_name ?? profile.display_name },
+            role: roleCandidate,
+            loading: false,
+            error: null,
+          });
         }
-
-        const errorMessage = fnError?.message ?? data?.error ?? 'Role unavailable';
-        if (attempt === MAX_RETRIES || !isRetryableError(errorMessage)) break;
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : String(err);
-        if (attempt === MAX_RETRIES || !isRetryableError(errorMessage)) break;
+        return;
       }
-
-      if (attempt < MAX_RETRIES) {
-        await wait(RETRY_DELAYS[attempt] ?? RETRY_DELAYS[RETRY_DELAYS.length - 1]);
-      }
+    } catch (err) {
+      console.error('Role fetch error:', err);
     }
 
     if (mountedRef.current) {
       setState({
-        user,
-        profile,
-        role: null,
-        loading: false,
-        error: 'Backend is temporarily unavailable. Please retry.',
+        user, profile, role: null, loading: false,
+        error: 'Unable to determine your role. Please contact your manager.',
       });
     }
   }, []);
 
   const startRoleFetch = useCallback((user: User) => {
     if (activeUserIdRef.current === user.id && inFlightRef.current) return;
-
     activeUserIdRef.current = user.id;
     setState(s => ({ ...s, user, loading: true, error: null }));
-
     const fetchPromise = fetchRole(user).finally(() => {
-      if (activeUserIdRef.current === user.id) {
-        inFlightRef.current = null;
-      }
+      if (activeUserIdRef.current === user.id) inFlightRef.current = null;
     });
-
     inFlightRef.current = fetchPromise;
   }, [fetchRole]);
 
@@ -155,7 +119,6 @@ export function useAgentAuth() {
 
     const handleSessionUser = (sessionUser: User | null) => {
       if (!mountedRef.current) return;
-
       if (sessionUser) {
         startRoleFetch(sessionUser);
       } else {
