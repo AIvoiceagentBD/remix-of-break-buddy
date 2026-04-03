@@ -18,7 +18,7 @@ serve(async (req) => {
 
     // Verify the caller is a manager
     const authHeader = req.headers.get("Authorization")!;
-    const callerClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    const callerClient = createClient(supabaseUrl, Deno.env.get("EXT_SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_ANON_KEY")!, {
       global: { headers: { Authorization: authHeader } },
     });
     const { data: { user: caller } } = await callerClient.auth.getUser();
