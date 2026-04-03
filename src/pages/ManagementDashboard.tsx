@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { useAgentAuth } from '@/hooks/useAgentAuth';
-import { supabase } from '@/lib/supabase';
+import { supabase, invokeEdgeFunction } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -75,33 +75,35 @@ export default function ManagementDashboard() {
 
   const today = getTodayEST();
 
+  // Direct Supabase queries for dashboard refresh
   const refreshData = useCallback(async () => {
     try {
-      const { data, error } = await supabase.functions.invoke('break-action', {
-        body: { action: 'manager-refresh', date: today },
-      });
-      if (error || !data) return; // keep existing state on failure
-      if (data.error) return;
-      setActiveBreaks(data.activeBreaks || []);
-      setTodaySessions(data.sessions || []);
-      setProfiles(data.profiles || []);
-      setApprovalRequests(data.approvals || []);
-      setLoggedInUserIds(new Set((data.logins || []).map((l: any) => l.user_id)));
-      setAgentUserIds(new Set((data.agentRoles || []).map((r: any) => r.user_id)));
+      const [activeResult, sessionsResult, profilesResult, approvalsResult, loginsResult, agentRolesResult] = await Promise.all([
+        supabase.from('active_breaks').select('*'),
+        supabase.from('break_sessions').select('*').eq('date', today),
+        supabase.from('profiles').select('*'),
+        supabase.from('break_approval_requests').select('*').eq('status', 'pending'),
+        supabase.from('login_sessions').select('user_id').eq('date', today),
+        supabase.from('user_roles').select('user_id').eq('role', 'agent'),
+      ]);
+      setActiveBreaks(activeResult.data || []);
+      setTodaySessions(sessionsResult.data || []);
+      setProfiles(profilesResult.data || []);
+      setApprovalRequests(approvalsResult.data || []);
+      setLoggedInUserIds(new Set((loginsResult.data || []).map((l: any) => l.user_id)));
+      setAgentUserIds(new Set((agentRolesResult.data || []).map((r: any) => r.user_id)));
     } catch {
       // keep existing state
     }
   }, [today]);
 
-  // Fetch agent emails once
+  // Fetch agent emails via edge function (needs admin API)
   const fetchEmails = useCallback(async () => {
     try {
-      const resp = await supabase.functions.invoke('manage-agent', {
-        body: { action: 'list' },
-      });
-      if (resp.data?.users) {
+      const { data } = await invokeEdgeFunction('manage-agent', { action: 'list' });
+      if (data?.users) {
         const map: Record<string, string> = {};
-        for (const u of resp.data.users) {
+        for (const u of data.users) {
           map[u.user_id] = u.email;
         }
         setAgentEmails(map);
@@ -131,6 +133,7 @@ export default function ManagementDashboard() {
     return () => { supabase.removeChannel(channel); };
   }, [refreshData]);
 
+  // Create agent via edge function (needs admin API)
   const handleAddAgent = async () => {
     setAddError('');
     if (!newName.trim()) { setAddError('Name is required'); return; }
@@ -138,11 +141,11 @@ export default function ManagementDashboard() {
     if (newPassword.length < 6) { setAddError('Password must be at least 6 characters'); return; }
     setAddLoading(true);
     try {
-      const resp = await supabase.functions.invoke('create-agent', {
-        body: { name: newName.trim(), email: newEmail.trim(), password: newPassword },
+      const { data, error } = await invokeEdgeFunction('create-agent', {
+        name: newName.trim(), email: newEmail.trim(), password: newPassword,
       });
-      if (resp.error) throw new Error(resp.error.message || 'Failed to create agent');
-      if (resp.data?.error) throw new Error(resp.data.error);
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
       setNewName(''); setNewEmail(''); setNewPassword('');
       setAddDialogOpen(false);
       toast.success('Agent created successfully');
@@ -155,15 +158,13 @@ export default function ManagementDashboard() {
     }
   };
 
+  // Edit agent - direct Supabase query
   const handleEditAgent = async () => {
     if (!editAgent || !editName.trim()) return;
     setEditLoading(true);
     try {
-      const resp = await supabase.functions.invoke('manage-agent', {
-        body: { action: 'update', user_id: editAgent.user_id, display_name: editName.trim() },
-      });
-      if (resp.error) throw new Error(resp.error.message);
-      if (resp.data?.error) throw new Error(resp.data.error);
+      const { error } = await supabase.from('profiles').update({ display_name: editName.trim() }).eq('user_id', editAgent.user_id);
+      if (error) throw error;
       setEditDialogOpen(false);
       toast.success('Agent updated');
       refreshData();
@@ -174,15 +175,16 @@ export default function ManagementDashboard() {
     }
   };
 
+  // Delete agent via edge function (needs admin API to delete auth user)
   const handleDeleteAgent = async () => {
     if (!deleteAgent) return;
     setDeleteLoading(true);
     try {
-      const resp = await supabase.functions.invoke('manage-agent', {
-        body: { action: 'delete', user_id: deleteAgent.user_id },
+      const { data, error } = await invokeEdgeFunction('manage-agent', {
+        action: 'delete', user_id: deleteAgent.user_id,
       });
-      if (resp.error) throw new Error(resp.error.message);
-      if (resp.data?.error) throw new Error(resp.data.error);
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
       setDeleteDialogOpen(false);
       toast.success('Agent removed');
       refreshData();
@@ -194,13 +196,32 @@ export default function ManagementDashboard() {
     }
   };
 
+  // Approve/reject - direct Supabase queries
   const handleApproval = async (requestId: string, approved: boolean) => {
     try {
-      const { data, error } = await supabase.functions.invoke('break-action', {
-        body: { action: 'approve-request', request_id: requestId, approved },
-      });
+      const status = approved ? 'approved' : 'rejected';
+      const { error } = await supabase.from('break_approval_requests')
+        .update({ status, resolved_at: new Date().toISOString(), resolved_by: user!.id })
+        .eq('id', requestId)
+        .eq('status', 'pending');
       if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+
+      if (approved) {
+        const { data: reqData } = await supabase.from('break_approval_requests')
+          .select('user_id, agent_name, break_type').eq('id', requestId).single();
+        if (reqData) {
+          const { data: existing } = await supabase.from('active_breaks')
+            .select('id').eq('user_id', reqData.user_id).maybeSingle();
+          if (!existing) {
+            await supabase.from('active_breaks').insert({
+              user_id: reqData.user_id,
+              agent_name: reqData.agent_name,
+              break_type: reqData.break_type,
+              start_time: new Date().toISOString(),
+            });
+          }
+        }
+      }
       toast.success(approved ? 'Break approved' : 'Break rejected');
       refreshData();
     } catch (err) {
@@ -209,20 +230,22 @@ export default function ManagementDashboard() {
     }
   };
 
+  // Manager start break - direct Supabase query
   const handleManagerStartBreak = async () => {
     if (!startBreakAgent) return;
     setStartBreakLoading(true);
     try {
-      const resp = await supabase.functions.invoke('manage-agent', {
-        body: {
-          action: 'start-break',
-          user_id: startBreakAgent.user_id,
-          agent_name: startBreakAgent.display_name,
-          break_type: startBreakType,
-        },
+      const { data: existing } = await supabase.from('active_breaks')
+        .select('id').eq('user_id', startBreakAgent.user_id).maybeSingle();
+      if (existing) throw new Error('Agent is already on break');
+
+      const { error } = await supabase.from('active_breaks').insert({
+        user_id: startBreakAgent.user_id,
+        agent_name: startBreakAgent.display_name,
+        break_type: startBreakType,
+        start_time: new Date().toISOString(),
       });
-      if (resp.error) throw new Error(resp.error.message);
-      if (resp.data?.error) throw new Error(resp.data.error);
+      if (error) throw error;
       setStartBreakDialogOpen(false);
       toast.success(`Started ${BREAK_LABELS[startBreakType]} for ${startBreakAgent.display_name}`);
       refreshData();
@@ -233,13 +256,28 @@ export default function ManagementDashboard() {
     }
   };
 
+  // Manager end break - direct Supabase queries
   const handleManagerEndBreak = async (agentUserId: string, agentName: string) => {
     try {
-      const resp = await supabase.functions.invoke('manage-agent', {
-        body: { action: 'end-break', user_id: agentUserId },
+      const { data: active } = await supabase.from('active_breaks')
+        .select('*').eq('user_id', agentUserId).maybeSingle();
+      if (!active) throw new Error('Agent is not on break');
+
+      const now = new Date();
+      const start = new Date(active.start_time);
+      const duration = Math.floor((now.getTime() - start.getTime()) / 1000);
+      const dateStr = now.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+
+      await supabase.from('break_sessions').insert({
+        user_id: agentUserId,
+        agent_name: active.agent_name,
+        break_type: active.break_type,
+        start_time: active.start_time,
+        end_time: now.toISOString(),
+        duration,
+        date: dateStr,
       });
-      if (resp.error) throw new Error(resp.error.message);
-      if (resp.data?.error) throw new Error(resp.data.error);
+      await supabase.from('active_breaks').delete().eq('user_id', agentUserId);
       toast.success(`Ended break for ${agentName}`);
       refreshData();
     } catch (err: any) {
@@ -247,23 +285,29 @@ export default function ManagementDashboard() {
     }
   };
 
+  // Manual break - direct Supabase query
   const handleAddManualBreak = async () => {
     if (!manualBreakAgent) return;
     const mins = parseFloat(manualBreakMinutes);
     if (isNaN(mins) || mins <= 0) { toast.error('Enter a valid number of minutes'); return; }
     setManualBreakLoading(true);
     try {
-      const resp = await supabase.functions.invoke('manage-agent', {
-        body: {
-          action: 'add-manual-break',
-          user_id: manualBreakAgent.user_id,
-          agent_name: manualBreakAgent.display_name,
-          break_type: manualBreakType,
-          duration_minutes: mins,
-        },
+      const durationSecs = Math.round(mins * 60);
+      const now = new Date();
+      const endTime = now.toISOString();
+      const startTime = new Date(now.getTime() - durationSecs * 1000).toISOString();
+      const dateStr = now.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+
+      const { error } = await supabase.from('break_sessions').insert({
+        user_id: manualBreakAgent.user_id,
+        agent_name: manualBreakAgent.display_name,
+        break_type: manualBreakType,
+        start_time: startTime,
+        end_time: endTime,
+        duration: durationSecs,
+        date: dateStr,
       });
-      if (resp.error) throw new Error(resp.error.message);
-      if (resp.data?.error) throw new Error(resp.data.error);
+      if (error) throw error;
       setManualBreakDialogOpen(false);
       toast.success(`Added ${mins} min ${BREAK_LABELS[manualBreakType]} for ${manualBreakAgent.display_name}`);
       refreshData();
@@ -531,7 +575,6 @@ export default function ManagementDashboard() {
 
           {/* ===== LIVE TAB ===== */}
           <TabsContent value="live" className="space-y-6">
-            {/* Active on Break Section */}
             <div className="space-y-3">
               <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
                 <Activity className="w-4 h-4 text-primary" />
@@ -582,8 +625,6 @@ export default function ManagementDashboard() {
               )}
             </div>
 
-            {/* Active Agents (Available) Section */}
-            {/* Active Agents (Logged in today, not on break) */}
             <div className="space-y-3">
               <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
                 <Users className="w-4 h-4 text-muted-foreground" />
@@ -620,7 +661,6 @@ export default function ManagementDashboard() {
                 </div>
               )}
             </div>
-
           </TabsContent>
 
           {/* ===== MANUAL BREAK TAB ===== */}
@@ -978,14 +1018,6 @@ export default function ManagementDashboard() {
         </DialogContent>
       </Dialog>
     </div>
-  );
-}
-
-function Coffee(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a2 2 0 0 1 2 2v1a2 2 0 0 1-2 2h-1"/>
-    </svg>
   );
 }
 
