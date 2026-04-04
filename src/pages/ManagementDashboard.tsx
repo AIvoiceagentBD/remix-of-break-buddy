@@ -141,8 +141,8 @@ export default function ManagementDashboard() {
     if (newPassword.length < 6) { setAddError('Password must be at least 6 characters'); return; }
     setAddLoading(true);
     try {
-      const { data, error } = await invokeEdgeFunction('create-agent', {
-        name: newName.trim(), email: newEmail.trim(), password: newPassword,
+      const { data, error } = await supabase.functions.invoke('create-agent', {
+        body: { name: newName.trim(), email: newEmail.trim(), password: newPassword },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
