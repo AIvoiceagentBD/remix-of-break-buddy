@@ -12,13 +12,14 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseUrl = Deno.env.get("EXT_SUPABASE_URL")!;
-    const serviceRoleKey = Deno.env.get("EXT_SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
     // Verify the caller is a manager
     const authHeader = req.headers.get("Authorization")!;
-    const callerClient = createClient(supabaseUrl, Deno.env.get("EXT_SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_ANON_KEY")!, {
+    const callerClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
     });
     const { data: { user: caller } } = await callerClient.auth.getUser();
@@ -48,7 +49,6 @@ serve(async (req) => {
       });
     }
 
-    // Create the user with admin API
     const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
@@ -62,7 +62,6 @@ serve(async (req) => {
       });
     }
 
-    // Assign agent role
     await supabaseAdmin.from("user_roles").insert({
       user_id: newUser.user.id,
       role: "agent",
