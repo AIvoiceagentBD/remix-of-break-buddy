@@ -12,13 +12,12 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseUrl = Deno.env.get("EXT_SUPABASE_URL")!;
-    const serviceRoleKey = Deno.env.get("EXT_SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
     const { email, password, name } = await req.json();
 
-    // Check if any manager exists already
     const { data: existingManagers } = await supabaseAdmin
       .from("user_roles")
       .select("id")
@@ -26,12 +25,11 @@ serve(async (req) => {
       .limit(1);
 
     if (existingManagers && existingManagers.length > 0) {
-      return new Response(JSON.stringify({ error: "A manager account already exists. Use the app to manage agents." }), {
+      return new Response(JSON.stringify({ error: "A manager account already exists." }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Create manager user
     const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
@@ -45,7 +43,6 @@ serve(async (req) => {
       });
     }
 
-    // Assign manager role
     await supabaseAdmin.from("user_roles").insert({
       user_id: newUser.user.id,
       role: "manager",
