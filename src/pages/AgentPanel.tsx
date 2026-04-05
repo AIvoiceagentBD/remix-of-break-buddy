@@ -16,7 +16,7 @@ import { toast } from 'sonner';
 import logo from '@/assets/logo.png';
 
 const BREAK_TYPES: BreakType[] = ['short', 'smoke', 'washroom', 'lunch', 'prayer'];
-const MAX_CONCURRENT_BREAKS = 3;
+const MAX_CONCURRENT_BREAKS = 2;
 
 export default function AgentPanel() {
   const { user, profile, logout, loading } = useAgentAuth();
@@ -252,7 +252,7 @@ export default function AgentPanel() {
                     {BREAK_ICONS[pendingApproval.break_type as BreakType]} {BREAK_LABELS[pendingApproval.break_type as BreakType]}
                   </p>
                   <p className="text-xs text-muted-foreground mt-2">
-                    3 agents are already on break. Management must approve.
+                    2 agents are already on break. Management must approve.
                   </p>
                 </div>
                 <div className="flex items-center justify-center gap-2">
