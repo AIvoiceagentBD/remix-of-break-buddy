@@ -16,7 +16,7 @@ import { toast } from 'sonner';
 import logo from '@/assets/logo.png';
 
 const BREAK_TYPES: BreakType[] = ['short', 'smoke', 'washroom', 'lunch', 'prayer'];
-const MAX_CONCURRENT_BREAKS = 3;
+const MAX_CONCURRENT_BREAKS = 2;
 
 export default function AgentPanel() {
   const { user, profile, logout, loading } = useAgentAuth();
