@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { User } from '@supabase/supabase-js';
 
-export type AppRole = 'agent' | 'manager';
+export type AppRole = 'agent' | 'manager' | 'lead_admin';
 
 interface AuthState {
   user: User | null;
@@ -14,7 +14,7 @@ interface AuthState {
 
 const ROLE_CACHE_PREFIX = 'agent-auth-role:';
 
-const isAppRole = (value: unknown): value is AppRole => value === 'agent' || value === 'manager';
+const isAppRole = (value: unknown): value is AppRole => value === 'agent' || value === 'manager' || value === 'lead_admin';
 
 const getProfileFromJwt = (user: User): { display_name: string } => ({
   display_name: user.user_metadata?.display_name ?? user.email ?? 'User',

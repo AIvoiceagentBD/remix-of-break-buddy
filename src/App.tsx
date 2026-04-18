@@ -8,6 +8,9 @@ import AgentPanel from "./pages/AgentPanel";
 import ManagementDashboard from "./pages/ManagementDashboard";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
+import AccountabilityList from "./pages/accountability/AccountabilityList";
+import AccountabilityNew from "./pages/accountability/AccountabilityNew";
+import AccountabilityDetail from "./pages/accountability/AccountabilityDetail";
 
 const queryClient = new QueryClient();
 
@@ -27,6 +30,21 @@ const App = () => (
           <Route path="/management" element={
             <ProtectedRoute allowedRoles={['manager']}>
               <ManagementDashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/accountability" element={
+            <ProtectedRoute allowedRoles={['agent', 'manager', 'lead_admin']}>
+              <AccountabilityList />
+            </ProtectedRoute>
+          } />
+          <Route path="/accountability/new" element={
+            <ProtectedRoute allowedRoles={['manager', 'lead_admin']}>
+              <AccountabilityNew />
+            </ProtectedRoute>
+          } />
+          <Route path="/accountability/:id" element={
+            <ProtectedRoute allowedRoles={['agent', 'manager', 'lead_admin']}>
+              <AccountabilityDetail />
             </ProtectedRoute>
           } />
           <Route path="*" element={<NotFound />} />
