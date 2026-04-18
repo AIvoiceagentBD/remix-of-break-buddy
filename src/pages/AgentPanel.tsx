@@ -230,6 +230,9 @@ export default function AgentPanel() {
                 </p>
               </div>
             </div>
+            <Button variant="ghost" size="sm" onClick={() => navigate('/accountability')} className="text-muted-foreground hover:text-foreground">
+              <ShieldAlert className="w-4 h-4 mr-1" /> <span className="hidden sm:inline">Accountability</span>
+            </Button>
             <Button variant="ghost" size="sm" onClick={handleLogout} className="text-muted-foreground hover:text-foreground">
               <LogOut className="w-4 h-4" />
             </Button>
