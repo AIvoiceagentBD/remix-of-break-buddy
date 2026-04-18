@@ -38,7 +38,7 @@ export interface AuditLog {
   action: string;
   performed_by: string;
   performed_by_name: string;
-  details: Record<string, unknown> | null;
+  details: unknown;
   created_at: string;
 }
 

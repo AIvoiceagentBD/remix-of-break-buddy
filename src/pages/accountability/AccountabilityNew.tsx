@@ -91,7 +91,7 @@ export default function AccountabilityNew() {
       action: 'created',
       performed_by: user.id,
       performed_by_name: submitterName,
-      details: { reason: values.reason, amount: values.amount },
+      details: { reason: values.reason, amount: values.amount } as never,
     });
 
     toast.success('Case submitted');

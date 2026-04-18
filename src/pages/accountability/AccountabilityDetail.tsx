@@ -63,7 +63,7 @@ export default function AccountabilityDetail() {
       action,
       performed_by: user.id,
       performed_by_name: profile?.display_name || user.email || 'User',
-      details,
+      details: details as never,
     });
   };
 
