@@ -24,7 +24,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/agent" element={
-            <ProtectedRoute allowedRoles={['agent', 'manager']}>
+            <ProtectedRoute allowedRoles={['agent', 'manager', 'lead_admin']}>
               <AgentPanel />
             </ProtectedRoute>
           } />
@@ -34,7 +34,7 @@ const App = () => (
             </ProtectedRoute>
           } />
           <Route path="/management" element={
-            <ProtectedRoute allowedRoles={['manager']}>
+            <ProtectedRoute allowedRoles={['manager', 'lead_admin']}>
               <ManagementDashboard />
             </ProtectedRoute>
           } />
