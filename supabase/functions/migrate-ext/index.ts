@@ -9,7 +9,10 @@ const corsHeaders = {
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
-    const dbUrl = Deno.env.get("EXT_SUPABASE_DB_URL")!;
+    const rawUrl = Deno.env.get("EXT_SUPABASE_DB_URL")!;
+    // URL-encode the password portion (between : after user and @ before host)
+    const m = rawUrl.match(/^(postgres(?:ql)?:\/\/[^:]+:)([^@]+)(@.+)$/);
+    const dbUrl = m ? `${m[1]}${encodeURIComponent(m[2])}${m[3]}` : rawUrl;
     const sql = postgres(dbUrl, { ssl: "require", max: 1 });
 
     // Add lead_admin to enum if missing (must be its own statement, not in tx)
