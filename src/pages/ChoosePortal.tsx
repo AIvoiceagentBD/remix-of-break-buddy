@@ -6,8 +6,7 @@ import logo from '@/assets/logo.png';
 
 export default function ChoosePortal() {
   const navigate = useNavigate();
-  const { logout, role } = useAgentAuth();
-  const isManager = role === 'manager';
+  const { logout } = useAgentAuth();
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background relative overflow-hidden">
