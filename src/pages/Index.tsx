@@ -19,8 +19,7 @@ export default function Index() {
 
   useEffect(() => {
     if (!loading && user && role) {
-      if (role === 'manager') navigate('/choose');
-      else if (role === 'lead_admin') navigate('/accountability');
+      if (role === 'manager' || role === 'lead_admin') navigate('/choose');
       else navigate('/agent');
     }
   }, [user, role, loading, navigate]);
