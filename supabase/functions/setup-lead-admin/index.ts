@@ -49,13 +49,24 @@ serve(async (req) => {
     // Ensure role lead_admin
     const { data: existingRole } = await admin
       .from("user_roles").select("id").eq("user_id", userId).eq("role", "lead_admin").maybeSingle();
+    let insertErr: string | null = null;
     if (!existingRole) {
-      await admin.from("user_roles").insert({ user_id: userId, role: "lead_admin" });
+      const { error: roleErr } = await admin.from("user_roles").insert({ user_id: userId, role: "lead_admin" });
+      if (roleErr) insertErr = roleErr.message;
     }
 
-    return new Response(JSON.stringify({ success: true, user_id: userId, email }), {
+    const { data: rolesAfter } = await admin
+      .from("user_roles").select("role").eq("user_id", userId);
+
+    return new Response(JSON.stringify({ success: true, user_id: userId, email, rolesAfter, insertErr }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: (err as Error).message }), {
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});
   } catch (err) {
     return new Response(JSON.stringify({ error: (err as Error).message }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
