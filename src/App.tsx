@@ -29,7 +29,7 @@ const App = () => (
             </ProtectedRoute>
           } />
           <Route path="/choose" element={
-            <ProtectedRoute allowedRoles={['manager']}>
+            <ProtectedRoute allowedRoles={['manager', 'lead_admin']}>
               <ChoosePortal />
             </ProtectedRoute>
           } />
