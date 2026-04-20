@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import AgentPanel from "./pages/AgentPanel";
 import ManagementDashboard from "./pages/ManagementDashboard";
+import ChoosePortal from "./pages/ChoosePortal";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AccountabilityList from "./pages/accountability/AccountabilityList";
@@ -25,6 +26,11 @@ const App = () => (
           <Route path="/agent" element={
             <ProtectedRoute allowedRoles={['agent', 'manager']}>
               <AgentPanel />
+            </ProtectedRoute>
+          } />
+          <Route path="/choose" element={
+            <ProtectedRoute allowedRoles={['manager']}>
+              <ChoosePortal />
             </ProtectedRoute>
           } />
           <Route path="/management" element={
