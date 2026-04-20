@@ -19,7 +19,7 @@ export default function ProtectedRoute({ children, allowedRoles }: ProtectedRout
 
   if (!user) return <Navigate to="/" replace />;
   if (role && !allowedRoles.includes(role)) {
-    const fallback = role === 'manager' ? '/choose' : role === 'lead_admin' ? '/accountability' : '/agent';
+    const fallback = role === 'manager' || role === 'lead_admin' ? '/choose' : '/agent';
     return <Navigate to={fallback} replace />;
   }
 
