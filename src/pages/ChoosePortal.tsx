@@ -23,18 +23,16 @@ export default function ChoosePortal() {
         </div>
 
         <div className="grid sm:grid-cols-2 gap-6">
-          {isManager && (
-            <button
-              onClick={() => navigate('/management')}
-              className="group glass-card rounded-3xl p-8 border border-border/80 shadow-xl text-left hover:scale-[1.02] hover:shadow-2xl transition-all"
-            >
-              <div className="w-14 h-14 rounded-2xl bg-primary/15 flex items-center justify-center mb-4 group-hover:bg-primary/25 transition-colors">
-                <LayoutDashboard className="w-7 h-7 text-primary" />
-              </div>
-              <h2 className="text-xl font-bold text-foreground mb-1">BreakTrack</h2>
-              <p className="text-sm text-muted-foreground">Live break monitoring, agents, and reports.</p>
-            </button>
-          )}
+          <button
+            onClick={() => navigate('/management')}
+            className="group glass-card rounded-3xl p-8 border border-border/80 shadow-xl text-left hover:scale-[1.02] hover:shadow-2xl transition-all"
+          >
+            <div className="w-14 h-14 rounded-2xl bg-primary/15 flex items-center justify-center mb-4 group-hover:bg-primary/25 transition-colors">
+              <LayoutDashboard className="w-7 h-7 text-primary" />
+            </div>
+            <h2 className="text-xl font-bold text-foreground mb-1">BreakTrack</h2>
+            <p className="text-sm text-muted-foreground">Live break monitoring, agents, and reports.</p>
+          </button>
 
           <button
             onClick={() => navigate('/accountability')}
