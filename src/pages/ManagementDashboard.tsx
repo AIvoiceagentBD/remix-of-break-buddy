@@ -3,7 +3,6 @@ import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { useAgentAuth } from '@/hooks/useAgentAuth';
 import { supabase } from '@/lib/supabase';
-import { invokeCloudFunction } from '@/lib/cloudFunctions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
