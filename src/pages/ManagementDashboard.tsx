@@ -180,8 +180,8 @@ export default function ManagementDashboard() {
     if (!deleteAgent) return;
     setDeleteLoading(true);
     try {
-      const { data, error } = await invokeCloudFunction<{ error?: string }>('manage-agent', {
-        action: 'delete', user_id: deleteAgent.user_id,
+      const { data, error } = await supabase.functions.invoke<{ error?: string }>('manage-agent', {
+        body: { action: 'delete', user_id: deleteAgent.user_id },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
