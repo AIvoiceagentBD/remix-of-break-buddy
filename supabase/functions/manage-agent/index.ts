@@ -9,10 +9,13 @@ const corsHeaders = {
   "Access-Control-Max-Age": "86400",
 };
 
-const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-const dbUrl = Deno.env.get("SUPABASE_DB_URL")!;
+const supabaseUrl = Deno.env.get("EXT_SUPABASE_URL") ?? Deno.env.get("SUPABASE_URL")!;
+const serviceRoleKey = Deno.env.get("EXT_SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const anonKey = Deno.env.get("EXT_SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_ANON_KEY")!;
+const rawDbUrl = Deno.env.get("EXT_SUPABASE_DB_URL") ?? Deno.env.get("SUPABASE_DB_URL")!;
+// URL-encode the password portion in case it contains special characters
+const dbUrlMatch = rawDbUrl.match(/^(postgres(?:ql)?:\/\/[^:]+:)([^@]+)(@.+)$/);
+const dbUrl = dbUrlMatch ? `${dbUrlMatch[1]}${encodeURIComponent(dbUrlMatch[2])}${dbUrlMatch[3]}` : rawDbUrl;
 
 const sql = postgres(dbUrl, {
   prepare: false,
@@ -42,8 +45,8 @@ serve(async (req) => {
     const { data: { user: caller } } = await callerClient.auth.getUser();
     if (!caller) return json({ error: "Unauthorized" }, 401);
 
-    const roleCheck = await sql`SELECT role FROM public.user_roles WHERE user_id = ${caller.id}::uuid AND role = 'manager' LIMIT 1`;
-    if (roleCheck.length === 0) return json({ error: "Only managers can manage agents" }, 403);
+    const roleCheck = await sql`SELECT role FROM public.user_roles WHERE user_id = ${caller.id}::uuid AND role IN ('manager','lead_admin')`;
+    if (roleCheck.length === 0) return json({ error: "Only managers or lead admins can manage agents" }, 403);
 
     const body = await req.json();
     const { action } = body;

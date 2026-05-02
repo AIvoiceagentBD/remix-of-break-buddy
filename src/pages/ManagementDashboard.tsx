@@ -3,6 +3,7 @@ import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { useAgentAuth } from '@/hooks/useAgentAuth';
 import { supabase } from '@/lib/supabase';
+import { invokeCloudFunction } from '@/lib/cloudFunctions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -100,7 +101,7 @@ export default function ManagementDashboard() {
   // Fetch agent emails via edge function (needs admin API)
   const fetchEmails = useCallback(async () => {
     try {
-      const { data } = await supabase.functions.invoke('manage-agent', { body: { action: 'list' } });
+      const { data } = await invokeCloudFunction<{ users: { user_id: string; email: string }[] }>('manage-agent', { action: 'list' });
       if (data?.users) {
         const map: Record<string, string> = {};
         for (const u of data.users) {
@@ -141,8 +142,8 @@ export default function ManagementDashboard() {
     if (newPassword.length < 6) { setAddError('Password must be at least 6 characters'); return; }
     setAddLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('create-agent', {
-        body: { name: newName.trim(), email: newEmail.trim(), password: newPassword },
+      const { data, error } = await invokeCloudFunction<{ error?: string }>('create-agent', {
+        name: newName.trim(), email: newEmail.trim(), password: newPassword,
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -180,8 +181,8 @@ export default function ManagementDashboard() {
     if (!deleteAgent) return;
     setDeleteLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('manage-agent', {
-        body: { action: 'delete', user_id: deleteAgent.user_id },
+      const { data, error } = await invokeCloudFunction<{ error?: string }>('manage-agent', {
+        action: 'delete', user_id: deleteAgent.user_id,
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
