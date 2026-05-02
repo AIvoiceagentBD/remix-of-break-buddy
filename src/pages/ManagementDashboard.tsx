@@ -101,7 +101,7 @@ export default function ManagementDashboard() {
   // Fetch agent emails via edge function (needs admin API)
   const fetchEmails = useCallback(async () => {
     try {
-      const { data } = await supabase.functions.invoke('manage-agent', { body: { action: 'list' } });
+      const { data } = await invokeCloudFunction<{ users: { user_id: string; email: string }[] }>('manage-agent', { action: 'list' });
       if (data?.users) {
         const map: Record<string, string> = {};
         for (const u of data.users) {
