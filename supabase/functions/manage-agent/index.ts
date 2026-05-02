@@ -4,7 +4,9 @@ import postgres from "npm:postgres@3.4.7";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE, PATCH",
+  "Access-Control-Max-Age": "86400",
 };
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -29,7 +31,7 @@ const json = (data: unknown, status = 200) =>
   });
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
 
   try {
     // Verify caller is a manager
