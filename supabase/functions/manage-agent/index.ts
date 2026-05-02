@@ -45,8 +45,8 @@ serve(async (req) => {
     const { data: { user: caller } } = await callerClient.auth.getUser();
     if (!caller) return json({ error: "Unauthorized" }, 401);
 
-    const roleCheck = await sql`SELECT role FROM public.user_roles WHERE user_id = ${caller.id}::uuid AND role = 'manager' LIMIT 1`;
-    if (roleCheck.length === 0) return json({ error: "Only managers can manage agents" }, 403);
+    const roleCheck = await sql`SELECT role FROM public.user_roles WHERE user_id = ${caller.id}::uuid AND role IN ('manager','lead_admin')`;
+    if (roleCheck.length === 0) return json({ error: "Only managers or lead admins can manage agents" }, 403);
 
     const body = await req.json();
     const { action } = body;
