@@ -78,6 +78,23 @@ serve(async (req) => {
       return json({ success: true });
     }
 
+    // END BREAK: bypass RLS via service role
+    if (action === "end_break") {
+      const { user_id } = body;
+      if (!user_id) return json({ error: "user_id required" }, 400);
+      const active = await sql`SELECT * FROM public.active_breaks WHERE user_id = ${user_id}::uuid LIMIT 1`;
+      if (active.length === 0) return json({ error: "Agent is not on break" }, 404);
+      const a = active[0];
+      const now = new Date();
+      const start = new Date(a.start_time);
+      const duration = Math.floor((now.getTime() - start.getTime()) / 1000);
+      const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(now);
+      await sql`INSERT INTO public.break_sessions (user_id, agent_name, break_type, start_time, end_time, duration, date)
+        VALUES (${user_id}::uuid, ${a.agent_name}, ${a.break_type}, ${a.start_time}, ${now.toISOString()}, ${duration}, ${dateStr}::date)`;
+      await sql`DELETE FROM public.active_breaks WHERE user_id = ${user_id}::uuid`;
+      return json({ success: true });
+    }
+
     return json({ error: "Invalid action" }, 400);
   } catch (err) {
     console.error("manage-agent error:", err);
