@@ -256,28 +256,14 @@ export default function ManagementDashboard() {
     }
   };
 
-  // Manager end break - direct Supabase queries
+  // Manager end break - via edge function (bypasses RLS for lead_admin)
   const handleManagerEndBreak = async (agentUserId: string, agentName: string) => {
     try {
-      const { data: active } = await supabase.from('active_breaks')
-        .select('*').eq('user_id', agentUserId).maybeSingle();
-      if (!active) throw new Error('Agent is not on break');
-
-      const now = new Date();
-      const start = new Date(active.start_time);
-      const duration = Math.floor((now.getTime() - start.getTime()) / 1000);
-      const dateStr = now.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-
-      await supabase.from('break_sessions').insert({
-        user_id: agentUserId,
-        agent_name: active.agent_name,
-        break_type: active.break_type,
-        start_time: active.start_time,
-        end_time: now.toISOString(),
-        duration,
-        date: dateStr,
+      const { data, error } = await supabase.functions.invoke('manage-agent', {
+        body: { action: 'end_break', user_id: agentUserId },
       });
-      await supabase.from('active_breaks').delete().eq('user_id', agentUserId);
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
       toast.success(`Ended break for ${agentName}`);
       refreshData();
     } catch (err: any) {
